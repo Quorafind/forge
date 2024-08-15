@@ -5,7 +5,7 @@ import findUp from 'find-up';
 import fs from 'fs-extra';
 import semver from 'semver';
 
-import { safeYarnOrNpm } from './yarn-or-npm';
+import { getPackageManager } from './package-manager';
 
 const d = debug('electron-forge:electron-version');
 
@@ -43,8 +43,14 @@ async function determineNodeModulesPath(dir: string, packageName: string): Promi
 }
 
 export class PackageNotFoundError extends Error {
-  constructor(packageName: string, dir: string) {
-    super(`Cannot find the package "${packageName}". Perhaps you need to run "${safeYarnOrNpm()} install" in "${dir}"?`);
+  constructor(errorMsg: string) {
+    super(errorMsg);
+  }
+
+  static async create(packageName: string, dir: string) {
+    const packageManager = await getPackageManager();
+
+    return new PackageNotFoundError(`Cannot find the package "${packageName}". Perhaps you need to run "${packageManager} install" in "${dir}"?`);
   }
 }
 
@@ -66,7 +72,7 @@ function getElectronModuleName(packageJSON: PackageJSONWithDeps): string {
 async function getElectronPackageJSONPath(dir: string, packageName: string): Promise<string | undefined> {
   const nodeModulesPath = await determineNodeModulesPath(dir, packageName);
   if (!nodeModulesPath) {
-    throw new PackageNotFoundError(packageName, dir);
+    throw await PackageNotFoundError.create(packageName, dir);
   }
 
   const electronPackageJSONPath = path.join(nodeModulesPath, 'package.json');
@@ -100,7 +106,7 @@ export async function getElectronVersion(dir: string, packageJSON: PackageJSONWi
       const electronPackageJSON = await fs.readJson(electronPackageJSONPath);
       version = electronPackageJSON.version;
     } else {
-      throw new PackageNotFoundError(packageName, dir);
+      throw await PackageNotFoundError.create(packageName, dir);
     }
   }
 
